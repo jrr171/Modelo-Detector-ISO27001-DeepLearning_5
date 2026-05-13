@@ -73,14 +73,19 @@ PLOTLY_FONT = dict(family="Inter, Arial, sans-serif", size=12, color="#1A1A2E")
 PLOTLY_AXIS = dict(gridcolor="#E8EAF6", tickfont=dict(color="#1A1A2E", size=11), titlefont=dict(color="#1A1A2E", size=12))
  
 def apply_dark_font(fig, title_color=None):
-    """Aplica fuente oscura a todos los elementos del gráfico."""
+    """Aplica fuente oscura a todos los elementos del gráfico (compatible Plotly 6.x)."""
     fig.update_layout(font=PLOTLY_FONT)
-    fig.update_xaxes(tickfont=dict(color="#1A1A2E", size=11), titlefont=dict(color="#1A1A2E"))
-    fig.update_yaxes(tickfont=dict(color="#1A1A2E", size=11), titlefont=dict(color="#1A1A2E"))
-    if hasattr(fig, 'data'):
-        for trace in fig.data:
-            if hasattr(trace, 'textfont') and trace.textfont:
-                trace.textfont.color = "#1A1A2E"
+    # update_xaxes/yaxes solo en gráficos cartesianos (no gauge, pie, sunburst, polar)
+    chart_types = {type(t).__name__ for t in fig.data}
+    cartesian = chart_types - {"Indicator","Pie","Sunburst","Scatterpolar","Barpolar"}
+    if cartesian:
+        try:
+            fig.update_xaxes(tickfont=dict(color="#1A1A2E", size=11),
+                             title_font=dict(color="#1A1A2E"))
+            fig.update_yaxes(tickfont=dict(color="#1A1A2E", size=11),
+                             title_font=dict(color="#1A1A2E"))
+        except Exception:
+            pass
     return fig
  
  
@@ -1081,3 +1086,4 @@ if run_dl or "dl_result" in st.session_state:
     )
 else:
     st.info("👆 Configura las épocas y presiona **'Entrenar y Analizar con DL'** para activar el análisis neuronal.")
+ 
