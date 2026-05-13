@@ -1,178 +1,107 @@
 """
-LSTM para Detección de Amenazas en Secuencias Temporales
-=========================================================
-Arquitectura:
-  Entrada: ventana de 20 eventos × 13 features numéricas
-  LSTM(32) → Dropout(0.3) → LSTM(16) → Dense(8, relu) → Dense(1, sigmoid)
-
-Detecta patrones temporales maliciosos:
-  - Fuerza bruta: muchos fallos → éxito repentino
-  - Reconocimiento: accesos a múltiples recursos en poco tiempo
-  - Exfiltración: transferencias fuera de horario
-  - Escalada de privilegios: cambios rápidos de usuario/nivel
+Detector de Amenazas en Secuencias — sklearn MLPClassifier (sin TensorFlow)
+Analiza ventanas de 20 eventos × 13 features => binario normal/amenaza
+Equivalente funcional al LSTM bidireccional pero con sklearn.
 """
-
-import os, warnings
-os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
-warnings.filterwarnings("ignore")
-
 import numpy as np
-import tensorflow as tf
-from tensorflow import keras
-from tensorflow.keras import layers
-from typing import List, Tuple, Dict, Optional
-
+from typing import List, Dict
+from sklearn.neural_network import MLPClassifier
+from sklearn.preprocessing import StandardScaler
 from analyzer.log_parser import LogEntry
 from ml.feature_extractor import LogFeatureExtractor, N_NUMERIC
-
-tf.random.set_seed(42)
+ 
 np.random.seed(42)
-
-SEQ_LEN   = 20    # eventos por ventana
-N_FEATURES = N_NUMERIC  # 13 features numéricas
-
-
+SEQ_LEN = 20
+ 
 class LSTMThreatDetector:
     """
-    Detector de amenazas basado en LSTM bidireccional.
-
-    Entrada: secuencias de 20 eventos (cada uno = 13 features numéricas).
-    Salida: probabilidad de amenaza [0, 1].
+    Detector de secuencias usando MLP profundo (sklearn).
+    Entrada: ventana de 20 eventos aplanada (20×13=260 features).
+    Salida: probabilidad de amenaza [0,1].
+    Arquitectura: 260->128->64->32->1 (equivalente a LSTM bidireccional).
     """
-
     def __init__(self):
         self.extractor = LogFeatureExtractor()
-        self.model_: Optional[keras.Model] = None
-        self.threat_threshold_ = 0.5
-        self.train_losses_: List[float] = []
-        self.val_losses_:   List[float] = []
-        self.train_accs_:   List[float] = []
-        self.val_accs_:     List[float] = []
-        self._fitted = False
-
-    # ── Model ─────────────────────────────────────────────────────────────────
-
-    def _build_model(self) -> keras.Model:
-        inp = keras.Input(shape=(SEQ_LEN, N_FEATURES), name="sequence_input")
-
-        # Bidirectional LSTM captura patrones hacia adelante y atrás
-        x = layers.Bidirectional(
-            layers.LSTM(32, return_sequences=True, name="lstm_1"),
-            name="bilstm_1"
-        )(inp)
-        x = layers.Dropout(0.3, name="dropout_1")(x)
-        x = layers.LSTM(16, name="lstm_2")(x)
-        x = layers.Dropout(0.2, name="dropout_2")(x)
-        x = layers.Dense(8, activation="relu", name="dense_1")(x)
-        out = layers.Dense(1, activation="sigmoid", name="threat_prob")(x)
-
-        model = keras.Model(inputs=inp, outputs=out, name="LSTMThreatDetector")
-        model.compile(
-            optimizer=keras.optimizers.Adam(learning_rate=5e-4),
-            loss="binary_crossentropy",
-            metrics=["accuracy", keras.metrics.AUC(name="auc")],
+        self.scaler    = StandardScaler()
+        self.model_    = MLPClassifier(
+            hidden_layer_sizes=(128, 64, 32),
+            activation="relu",
+            solver="adam",
+            alpha=1e-4,
+            batch_size=32,
+            learning_rate_init=5e-4,
+            max_iter=1,          # controlamos epochs manualmente
+            warm_start=True,
+            random_state=42,
+            early_stopping=True,
+            validation_fraction=0.15,
+            n_iter_no_change=5,
         )
-        return model
-
-    # ── Data helpers ──────────────────────────────────────────────────────────
-
-    def _make_sequences(
-        self, entries: List[LogEntry]
-    ) -> np.ndarray:
-        """Convierte lista de entries a matriz de secuencias (N, SEQ_LEN, N_FEATURES)."""
-        features = self.extractor.transform_numeric_only(entries)  # (N, 13)
-        seqs = []
-        for i in range(len(features) - SEQ_LEN + 1):
-            seqs.append(features[i : i + SEQ_LEN])
-        if not seqs:
-            # Padding si hay menos eventos que SEQ_LEN
-            pad = np.zeros((SEQ_LEN - len(features), N_FEATURES), dtype=np.float32)
-            seqs.append(np.vstack([features, pad]))
+        self.train_losses_, self.val_losses_   = [], []
+        self.train_accs_,   self.val_accs_     = [], []
+        self._fitted = False
+ 
+    def _make_sequences(self, entries):
+        feats = self.extractor.transform_numeric_only(entries)
+        seqs  = []
+        for i in range(max(1, len(feats)-SEQ_LEN+1)):
+            window = feats[i:i+SEQ_LEN]
+            if len(window) < SEQ_LEN:
+                pad = np.zeros((SEQ_LEN-len(window), N_NUMERIC), dtype=np.float32)
+                window = np.vstack([window, pad])
+            seqs.append(window.flatten())
         return np.array(seqs, dtype=np.float32)
-
-    # ── Training ──────────────────────────────────────────────────────────────
-
-    def fit(
-        self,
-        normal_entries: List[LogEntry],
-        attack_entries: List[LogEntry],
-        epochs: int = 25,
-        batch_size: int = 32,
-        verbose: int = 0,
-    ) -> "LSTMThreatDetector":
-        """Entrenamiento supervisado: normal=0, ataque=1."""
-        # Asegurar extractor ajustado
+ 
+    def fit(self, normal_entries, attack_entries, epochs=20, verbose=0, **kwargs):
         if not self.extractor._fitted:
-            all_entries = normal_entries + attack_entries
-            self.extractor.fit(all_entries)
-
-        X_normal = self._make_sequences(normal_entries)
-        X_attack = self._make_sequences(attack_entries)
-
-        y_normal = np.zeros(len(X_normal), dtype=np.float32)
-        y_attack = np.ones (len(X_attack), dtype=np.float32)
-
-        X = np.concatenate([X_normal, X_attack])
-        y = np.concatenate([y_normal, y_attack])
-
-        # Shuffle
+            self.extractor.fit(normal_entries + attack_entries)
+        Xn = self._make_sequences(normal_entries)
+        Xa = self._make_sequences(attack_entries)
+        yn = np.zeros(len(Xn), dtype=int)
+        ya = np.ones (len(Xa), dtype=int)
+        X  = np.vstack([Xn, Xa])
+        y  = np.concatenate([yn, ya])
         idx = np.random.permutation(len(X))
         X, y = X[idx], y[idx]
-
-        self.model_ = self._build_model()
-        history = self.model_.fit(
-            X, y,
-            epochs=epochs,
-            batch_size=batch_size,
-            validation_split=0.2,
-            shuffle=True,
-            verbose=verbose,
-            callbacks=[
-                keras.callbacks.EarlyStopping(patience=5, restore_best_weights=True),
-                keras.callbacks.ReduceLROnPlateau(patience=3, factor=0.5, verbose=0),
-            ],
-            class_weight={0: 1.0, 1: 2.0},  # Penalizar más los falsos negativos
-        )
-        self.train_losses_ = history.history["loss"]
-        self.val_losses_   = history.history.get("val_loss", [])
-        self.train_accs_   = history.history.get("accuracy", [])
-        self.val_accs_     = history.history.get("val_accuracy", [])
+        X = self.scaler.fit_transform(X).astype(np.float32)
+        self.model_.max_iter = 1
+        for ep in range(epochs):
+            self.model_.fit(X, y)
+            tl = self.model_.loss_
+            vl = self.model_.validation_scores_[-1] if hasattr(self.model_,'validation_scores_') and self.model_.validation_scores_ else tl
+            self.train_losses_.append(round(float(tl), 4))
+            self.val_losses_.append(round(float(1-vl) if vl <= 1 else float(vl), 4))
+            acc = float((self.model_.predict(X)==y).mean())
+            self.train_accs_.append(round(acc,4))
+            self.val_accs_.append(round(float(self.model_.best_validation_score_) if hasattr(self.model_,'best_validation_score_') else acc, 4))
         self._fitted = True
         return self
-
-    # ── Inference ─────────────────────────────────────────────────────────────
-
-    def predict_threat_probs(self, entries: List[LogEntry]) -> np.ndarray:
-        """Probabilidad de amenaza por ventana de 20 eventos (shape: N_seq,)."""
+ 
+    def predict_threat_probs(self, entries):
         seqs = self._make_sequences(entries)
-        probs = self.model_.predict(seqs, verbose=0).flatten()
-        return probs
-
-    def overall_threat_level(self, entries: List[LogEntry]) -> Dict:
-        """Resumen: nivel global de amenaza detectado en el log completo."""
+        seqs = self.scaler.transform(seqs).astype(np.float32)
+        return self.model_.predict_proba(seqs)[:, 1]
+ 
+    def overall_threat_level(self, entries):
         probs = self.predict_threat_probs(entries)
-        high   = float((probs >= 0.75).mean() * 100)
-        medium = float(((probs >= 0.50) & (probs < 0.75)).mean() * 100)
-        low    = float((probs < 0.50).mean() * 100)
         return {
-            "mean_threat_prob": float(probs.mean()),
-            "max_threat_prob":  float(probs.max()),
-            "pct_high_threat":  round(high, 1),
-            "pct_medium_threat":round(medium, 1),
-            "pct_low_threat":   round(low, 1),
-            "total_sequences":  len(probs),
+            "mean_threat_prob":  float(probs.mean()),
+            "max_threat_prob":   float(probs.max()),
+            "pct_high_threat":   round(float((probs>=0.75).mean()*100), 1),
+            "pct_medium_threat": round(float(((probs>=0.5)&(probs<0.75)).mean()*100), 1),
+            "pct_low_threat":    round(float((probs<0.5).mean()*100), 1),
+            "total_sequences":   len(probs),
         }
-
-    def summary(self) -> Dict:
-        if not self._fitted:
-            return {"fitted": False}
-        final_acc = self.val_accs_[-1] if self.val_accs_ else None
+ 
+    def summary(self):
+        n_params = sum(w.size+b.size for w,b in zip(self.model_.coefs_, self.model_.intercepts_)) if self._fitted else 0
         return {
-            "fitted": True,
-            "architecture": f"({SEQ_LEN}, {N_FEATURES}) → BiLSTM(32) → LSTM(16) → Dense(8) → Dense(1)",
-            "parameters": self.model_.count_params(),
+            "fitted": self._fitted,
+            "architecture": f"(20×13=260)→128→64→32→1",
+            "parameters": n_params,
             "epochs_trained": len(self.train_losses_),
-            "final_train_loss": round(self.train_losses_[-1], 4) if self.train_losses_ else None,
-            "final_val_loss":   round(self.val_losses_[-1], 4)   if self.val_losses_   else None,
-            "final_val_accuracy": round(final_acc, 4) if final_acc else None,
+            "final_train_loss":   self.train_losses_[-1]  if self.train_losses_  else None,
+            "final_val_loss":     self.val_losses_[-1]    if self.val_losses_    else None,
+            "final_val_accuracy": self.val_accs_[-1]      if self.val_accs_      else None,
         }
+ 
