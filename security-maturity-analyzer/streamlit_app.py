@@ -68,6 +68,22 @@ def hex_rgba(hex_color: str, alpha: float = 1.0) -> str:
     return f"rgba({r},{g},{b},{alpha})"
  
  
+# Configuración global de fuente oscura para todos los gráficos Plotly
+PLOTLY_FONT = dict(family="Inter, Arial, sans-serif", size=12, color="#1A1A2E")
+PLOTLY_AXIS = dict(gridcolor="#E8EAF6", tickfont=dict(color="#1A1A2E", size=11), titlefont=dict(color="#1A1A2E", size=12))
+ 
+def apply_dark_font(fig, title_color=None):
+    """Aplica fuente oscura a todos los elementos del gráfico."""
+    fig.update_layout(font=PLOTLY_FONT)
+    fig.update_xaxes(tickfont=dict(color="#1A1A2E", size=11), titlefont=dict(color="#1A1A2E"))
+    fig.update_yaxes(tickfont=dict(color="#1A1A2E", size=11), titlefont=dict(color="#1A1A2E"))
+    if hasattr(fig, 'data'):
+        for trace in fig.data:
+            if hasattr(trace, 'textfont') and trace.textfont:
+                trace.textfont.color = "#1A1A2E"
+    return fig
+ 
+ 
 # ────────────────────────────────────────────────────────────────────────────
 # Page config
 # ────────────────────────────────────────────────────────────────────────────
@@ -91,9 +107,11 @@ st.markdown("""
   .kpi-val     { font-size:2rem; font-weight:800; }
   .kpi-lbl     { font-size:.8rem; color:#78909C; font-weight:600; letter-spacing:.5px; }
   .finding     { background:#FFF3E0; border-left:4px solid #FF6F00;
-                 border-radius:6px; padding:8px 14px; margin-bottom:6px; font-size:.9rem; }
+                 border-radius:6px; padding:8px 14px; margin-bottom:6px; font-size:.9rem;
+                 color:#212121; font-weight:500; }
   .rec         { background:#E8F5E9; border-left:4px solid #388E3C;
-                 border-radius:6px; padding:8px 14px; margin-bottom:6px; font-size:.9rem; }
+                 border-radius:6px; padding:8px 14px; margin-bottom:6px; font-size:.9rem;
+                 color:#1B2B1B; font-weight:500; }
   .chart-box   { background:#fff; border:1px solid #E3EAF5; border-radius:12px; padding:16px; }
   footer       { text-align:center; color:#90A4AE; font-size:.78rem; margin-top:40px; }
 </style>
@@ -256,6 +274,7 @@ with col_gauge:
         }
     ))
     fig_gauge.update_layout(height=320, margin=dict(l=20,r=20,t=60,b=10), paper_bgcolor="white")
+    apply_dark_font(fig_gauge)
     st.plotly_chart(fig_gauge, use_container_width=True)
     st.markdown(f'<div style="background:{lc}18;border:1px solid {lc}44;border-radius:8px;padding:10px 14px;font-size:.88em;color:#333">'
                 f'<b style="color:{lc}">ℹ {lvl_info["name"]}</b><br>{lvl_info["description"]}</div>', unsafe_allow_html=True)
@@ -298,6 +317,7 @@ with col_radar:
         margin=dict(l=60, r=60, t=40, b=60),
         paper_bgcolor="white",
     )
+    apply_dark_font(fig_radar)
     st.plotly_chart(fig_radar, use_container_width=True)
  
 # ════════════════════════════════════════════════════════
@@ -334,6 +354,7 @@ with col_bar1:
         yaxis=dict(title="N° eventos", gridcolor="#F0F0F0"),
         xaxis=dict(tickangle=-25),
     )
+    apply_dark_font(fig_bar)
     st.plotly_chart(fig_bar, use_container_width=True)
  
 # ── GRÁFICO 4: Desglose de componentes del score (stacked horizontal bar) ─────
@@ -358,6 +379,7 @@ with col_bar2:
         legend=dict(orientation="h", y=-0.35, x=0.5, xanchor="center"),
         xaxis=dict(title="Puntos", range=[0,100], gridcolor="#F0F0F0"),
     )
+    apply_dark_font(fig_stack)
     st.plotly_chart(fig_stack, use_container_width=True)
  
 # ════════════════════════════════════════════════════════
@@ -394,6 +416,7 @@ with col_scores:
         xaxis=dict(range=[0,110], title="Score (0–100)", gridcolor="#F0F0F0"),
         showlegend=False,
     )
+    apply_dark_font(fig_h)
     st.plotly_chart(fig_h, use_container_width=True)
  
 # ── GRÁFICO 6: Pie distribución de eventos por dominio ────────────────────────
@@ -417,6 +440,7 @@ with col_pie:
                           font_size=12, showarrow=False)],
         showlegend=False,
     )
+    apply_dark_font(fig_pie)
     st.plotly_chart(fig_pie, use_container_width=True)
  
 # ════════════════════════════════════════════════════════
@@ -462,6 +486,7 @@ with col_heat:
         xaxis=dict(tickangle=-15, tickfont=dict(size=10)),
         yaxis=dict(tickfont=dict(size=10)),
     )
+    apply_dark_font(fig_heat)
     st.plotly_chart(fig_heat, use_container_width=True)
     st.caption("🔴 Rojo = mayor riesgo/exposición · 🟢 Verde = menor riesgo · Valores en escala 0–100")
  
@@ -499,6 +524,7 @@ with col_sun:
         height=350, margin=dict(l=0,r=0,t=10,b=10),
         paper_bgcolor="white",
     )
+    apply_dark_font(fig_sun)
     st.plotly_chart(fig_sun, use_container_width=True)
     st.caption("🟢 Verde = eventos seguros · 🔴 Rojo = eventos de riesgo · Por dominio ISO 27001")
  
@@ -530,6 +556,7 @@ with col_hist:
         xaxis=dict(tickfont=dict(size=9)),
         showlegend=False,
     )
+    apply_dark_font(fig_hist)
     st.plotly_chart(fig_hist, use_container_width=True)
  
 # ── GRÁFICO 10: Análisis de brecha — distancia a nivel 5 ─────────────────────
@@ -559,6 +586,7 @@ with col_prog:
         legend=dict(orientation="h", y=-0.18, x=0.5, xanchor="center"),
         xaxis=dict(title="Puntos", range=[0,100], gridcolor="#F0F0F0"),
     )
+    apply_dark_font(fig_gap)
     st.plotly_chart(fig_gap, use_container_width=True)
     st.caption(f"Brecha global al Nivel 5: **{100-result.overall_score:.1f} pts** — Score actual: {result.overall_score:.1f}/100")
  
@@ -851,6 +879,7 @@ if run_dl or "dl_result" in st.session_state:
             xaxis=dict(title="Score de Anomalía (0–100)", gridcolor="#F0F0F0"),
             yaxis=dict(title="N° eventos", gridcolor="#F0F0F0"),
         )
+        apply_dark_font(fig_hist_ae)
         st.plotly_chart(fig_hist_ae, use_container_width=True)
  
     with ae2:
@@ -875,6 +904,7 @@ if run_dl or "dl_result" in st.session_state:
             xaxis=dict(title="N° evento", gridcolor="#F0F0F0"),
             yaxis=dict(title="Score anomalía (0–100)", range=[0,105], gridcolor="#F0F0F0"),
         )
+        apply_dark_font(fig_time)
         st.plotly_chart(fig_time, use_container_width=True)
  
     st.info(
@@ -912,6 +942,7 @@ if run_dl or "dl_result" in st.session_state:
             xaxis=dict(title="Ventana temporal", gridcolor="#F0F0F0"),
             yaxis=dict(title="Probabilidad", range=[0,1.05], gridcolor="#F0F0F0"),
         )
+        apply_dark_font(fig_lstm)
         st.plotly_chart(fig_lstm, use_container_width=True)
  
     with ls2:
@@ -933,6 +964,7 @@ if run_dl or "dl_result" in st.session_state:
             annotations=[dict(text=f"{tl['mean_threat_prob']:.1%}<br>media", x=0.5, y=0.5,
                               font_size=12, showarrow=False)],
         )
+        apply_dark_font(fig_donut)
         st.plotly_chart(fig_donut, use_container_width=True)
  
     st.info(
@@ -973,6 +1005,7 @@ if run_dl or "dl_result" in st.session_state:
             xaxis=dict(tickfont=dict(size=9)),
             showlegend=False,
         )
+        apply_dark_font(fig_mlp)
         st.plotly_chart(fig_mlp, use_container_width=True)
  
     with ml2:
@@ -1007,6 +1040,7 @@ if run_dl or "dl_result" in st.session_state:
                               font=dict(color=acuerdo_color, size=12), showarrow=False)],
             showlegend=False,
         )
+        apply_dark_font(fig_comp)
         st.plotly_chart(fig_comp, use_container_width=True)
  
     # ── Tabla resumen modelos DL ───────────────────────────────────────────────
