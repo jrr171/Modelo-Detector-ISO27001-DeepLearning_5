@@ -3,7 +3,7 @@ Streamlit Web App — Evaluador de Madurez en Seguridad de la Información
 Tesis: Modelo de Evaluación De la Madurez en Seguridad de la Información
 Usando Simulador para la Detección de Incumplimiento de Requisitos
 en una Empresa de Inteligencia Comercial en el Sector Comercio Exterior
- 
+
 Gráficos incluidos:
   1. Medidor (gauge) de madurez global
   2. Radar de dominios ISO 27001
@@ -15,24 +15,24 @@ Gráficos incluidos:
   8. Sunburst de eventos clasificados
   9. Histograma de niveles por dominio
 """
- 
+
 import sys, io, json, tempfile, os, math
 from pathlib import Path
- 
+
 import streamlit as st
 import plotly.graph_objects as go
 import plotly.express as px
 import pandas as pd
- 
+
 ROOT = Path(__file__).parent
 sys.path.insert(0, str(ROOT))
- 
+
 from analyzer.log_parser       import LogParser
 from analyzer.event_classifier import EventClassifier
 from analyzer.maturity_scorer  import MaturityScorer
 from analyzer.report_generator import export_html, export_json
 from rules.iso27001_controls   import MATURITY_LEVELS, ISO27001_DOMAINS
- 
+
 # ────────────────────────────────────────────────────────────────────────────
 # Paleta de colores corporativa (tesis)
 # ────────────────────────────────────────────────────────────────────────────
@@ -50,9 +50,9 @@ C = {
         "#1565C0","#6A1B9A","#00695C","#E65100","#4527A0","#00838F",
     ],
 }
- 
+
 def level_color(lvl): return C["level"].get(lvl, "#555")
- 
+
 def score_color(s):
     if s >= 81: return C["level"][5]
     if s >= 61: return C["level"][4]
@@ -60,18 +60,18 @@ def score_color(s):
     if s >= 21: return C["level"][2]
     if s >  0:  return C["level"][1]
     return C["level"][0]
- 
+
 def hex_rgba(hex_color: str, alpha: float = 1.0) -> str:
     """Convert #RRGGBB to rgba(r,g,b,alpha) for Plotly compatibility."""
     h = hex_color.lstrip("#")
     r, g, b = int(h[0:2],16), int(h[2:4],16), int(h[4:6],16)
     return f"rgba({r},{g},{b},{alpha})"
- 
- 
+
+
 # Configuración global de fuente oscura para todos los gráficos Plotly
 PLOTLY_FONT = dict(family="Inter, Arial, sans-serif", size=12, color="#1A1A2E")
 PLOTLY_AXIS = dict(gridcolor="#E8EAF6", tickfont=dict(color="#1A1A2E", size=11), titlefont=dict(color="#1A1A2E", size=12))
- 
+
 def apply_dark_font(fig, title_color=None):
     """Aplica fuente oscura a todos los elementos del gráfico (compatible Plotly 6.x)."""
     fig.update_layout(font=PLOTLY_FONT)
@@ -87,8 +87,8 @@ def apply_dark_font(fig, title_color=None):
         except Exception:
             pass
     return fig
- 
- 
+
+
 # ────────────────────────────────────────────────────────────────────────────
 # Page config
 # ────────────────────────────────────────────────────────────────────────────
@@ -98,7 +98,7 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded",
 )
- 
+
 st.markdown("""
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap');
@@ -121,7 +121,7 @@ st.markdown("""
   footer       { text-align:center; color:#90A4AE; font-size:.78rem; margin-top:40px; }
 </style>
 """, unsafe_allow_html=True)
- 
+
 # ────────────────────────────────────────────────────────────────────────────
 # Sidebar
 # ────────────────────────────────────────────────────────────────────────────
@@ -142,20 +142,20 @@ with st.sidebar:
     st.divider()
     st.caption("ISO/IEC 27001:2013 · COBIT 5 · NTP ISO/IEC 27001:2008")
     st.caption("Comercio Exterior — Tesis 2025")
- 
+
 # ────────────────────────────────────────────────────────────────────────────
 # Header
 # ────────────────────────────────────────────────────────────────────────────
 st.markdown('<div class="main-title">🛡 Evaluador de Madurez en Seguridad de la Información</div>', unsafe_allow_html=True)
 st.markdown('<div class="subtitle">Detección de Incumplimiento de Requisitos ISO 27001 mediante análisis de logs · Empresa de Inteligencia Comercial · Sector Comercio Exterior</div>', unsafe_allow_html=True)
- 
+
 # ────────────────────────────────────────────────────────────────────────────
 # Input tabs
 # ────────────────────────────────────────────────────────────────────────────
 tab_up, tab_demo, tab_paste = st.tabs(["📁 Subir archivos", "🧪 Demo Comercio Exterior", "📋 Pegar texto"])
- 
+
 entries, source_label = [], ""
- 
+
 with tab_up:
     st.markdown("**Formatos soportados:** Apache/Nginx `.log`, Linux syslog/auth.log, Windows Event Log `.csv`, JSON `.json`, `.gz`")
     uploaded = st.file_uploader("Arrastra tus archivos de log aquí", type=["log","txt","csv","json","gz"], accept_multiple_files=True)
@@ -167,7 +167,7 @@ with tab_up:
             entries = parser.parse_path(d)
             source_label = f"{len(uploaded)} archivo(s)"
             st.success(f"✅ {parser.stats['parsed_ok']:,} eventos leídos de {len(uploaded)} archivo(s)")
- 
+
 with tab_demo:
     st.info("Logs simulados de una empresa de Comercio Exterior (declaraciones DUA, ERP aduanero, portal de importaciones, SIEM, Active Directory).")
     if st.button("▶ Ejecutar análisis con logs demo", type="primary"):
@@ -181,7 +181,7 @@ with tab_demo:
         source_label = "Logs Demo — Comercio Exterior"
         st.success(f"✅ {parser.stats['parsed_ok']:,} eventos procesados")
         st.session_state.update({"entries": entries, "source": source_label})
- 
+
 with tab_paste:
     pasted = st.text_area("Pega el contenido de tu log:", height=180,
         placeholder="Jan  1 10:00:00 srv sshd[1234]: Failed password for root from 10.0.0.1 port 22 ssh2")
@@ -193,11 +193,11 @@ with tab_paste:
         os.unlink(tf_path)
         source_label = "Texto pegado"
         st.success(f"✅ {len(entries):,} eventos leídos")
- 
+
 if not entries and "entries" in st.session_state:
     entries = st.session_state["entries"]
     source_label = st.session_state.get("source","")
- 
+
 # ────────────────────────────────────────────────────────────────────────────
 # ANÁLISIS Y GRÁFICOS
 # ────────────────────────────────────────────────────────────────────────────
@@ -214,18 +214,18 @@ if not entries:
         with st.expander(f"{dom.id} — {dom.name}  (peso {dom.weight:.0%})"):
             st.caption(dom.description)
     st.stop()
- 
+
 # Pipeline
 with st.spinner("Clasificando eventos y calculando madurez…"):
     domain_stats = EventClassifier().classify(entries)
     result = MaturityScorer().score(domain_stats)
- 
+
 lvl      = result.overall_level
 lvl_info = MATURITY_LEVELS[lvl]
 lc       = level_color(lvl)
 domains  = list(result.domain_scores.values())
 dom_names = [d.domain_name for d in domains]
- 
+
 # ── KPIs ──────────────────────────────────────────────────────────────────────
 st.divider()
 c1,c2,c3,c4,c5,c6 = st.columns(6)
@@ -244,13 +244,13 @@ for col, (val, lbl, color) in zip([c1,c2,c3,c4,c5,c6], kpis):
             f'<div class="kpi-lbl">{lbl}</div></div>',
             unsafe_allow_html=True,
         )
- 
+
 # ════════════════════════════════════════════════════════
 # FILA 1: Gauge + Radar
 # ════════════════════════════════════════════════════════
 st.markdown('<div class="section-hdr">📊 Resultado Global</div>', unsafe_allow_html=True)
 col_gauge, col_radar = st.columns([1, 1.2])
- 
+
 # ── GRÁFICO 1: Gauge / Medidor de madurez ────────────────────────────────────
 with col_gauge:
     st.markdown("#### 🎯 Medidor de Nivel de Madurez")
@@ -283,54 +283,234 @@ with col_gauge:
     st.plotly_chart(fig_gauge, use_container_width=True)
     st.markdown(f'<div style="background:{lc}18;border:1px solid {lc}44;border-radius:8px;padding:10px 14px;font-size:.88em;color:#333">'
                 f'<b style="color:{lc}">ℹ {lvl_info["name"]}</b><br>{lvl_info["description"]}</div>', unsafe_allow_html=True)
- 
-# ── GRÁFICO 2: Radar / Spider de dominios ISO 27001 ──────────────────────────
+
+# ── GRÁFICO 2: Radar compacto en columna (se mantiene por coherencia de layout) ──
 with col_radar:
     st.markdown("#### 🕸 Radar de Dominios ISO 27001")
     scores_radar = [d.raw_score for d in domains]
     labels_radar = [f"A.{ISO27001_DOMAINS[d.domain_key].id.split('A.')[1]}<br>{d.domain_name}" for d in domains]
- 
     fig_radar = go.Figure()
     fig_radar.add_trace(go.Scatterpolar(
         r=scores_radar + [scores_radar[0]],
         theta=labels_radar + [labels_radar[0]],
         fill="toself",
-        fillcolor=hex_rgba(C["primary"], 0.2),
-        line=dict(color=C["primary"], width=2.5),
-        name="Score por dominio",
+        fillcolor=hex_rgba(lc, 0.18),
+        line=dict(color=lc, width=2.5),
+        name="Score actual",
         hovertemplate="<b>%{theta}</b><br>Score: %{r:.1f}/100<extra></extra>",
     ))
-    # Añadir anillo de referencia nivel 3 (60 pts)
     fig_radar.add_trace(go.Scatterpolar(
-        r=[60]*len(labels_radar) + [60],
-        theta=labels_radar + [labels_radar[0]],
-        mode="lines",
-        line=dict(color="#FBC02D", width=1.5, dash="dot"),
-        name="Referencia Nivel 3 (60 pts)",
-        hoverinfo="skip",
+        r=[60]*len(labels_radar)+[60], theta=labels_radar+[labels_radar[0]],
+        mode="lines", line=dict(color="#FBC02D", width=1.5, dash="dot"),
+        name="Referencia Nivel 3 (60 pts)", hoverinfo="skip",
     ))
     fig_radar.update_layout(
         polar=dict(
             radialaxis=dict(visible=True, range=[0,100], tickfont=dict(size=9),
                             gridcolor="#E8EAF6", tickvals=[20,40,60,80,100]),
-            angularaxis=dict(tickfont=dict(size=10)),
-            bgcolor="white",
+            angularaxis=dict(tickfont=dict(size=10)), bgcolor="white",
         ),
         showlegend=True,
         legend=dict(orientation="h", yanchor="bottom", y=-0.15, x=0.5, xanchor="center"),
-        height=360,
-        margin=dict(l=60, r=60, t=40, b=60),
-        paper_bgcolor="white",
+        height=360, margin=dict(l=60,r=60,t=40,b=60), paper_bgcolor="white",
     )
     apply_dark_font(fig_radar)
     st.plotly_chart(fig_radar, use_container_width=True)
- 
+
+# ════════════════════════════════════════════════════════
+# RADAR AMPLIADO — Sección destacada completa
+# ════════════════════════════════════════════════════════
+st.markdown("---")
+st.markdown(
+    '<div class="section-hdr" style="font-size:1.35rem;color:#0D47A1;">'
+    '🕸 Análisis Detallado por Dominio ISO 27001 — Radar de Madurez</div>',
+    unsafe_allow_html=True,
+)
+st.markdown(
+    "El gráfico radar muestra el **perfil de madurez** de la organización en los "
+    "**6 dominios de control ISO/IEC 27001:2013**. Cada vértice representa el score "
+    "(0–100) de un dominio. Los **anillos de referencia** indican los umbrales de los "
+    "5 niveles COBIT. La forma del polígono revela qué áreas son fortalezas y cuáles "
+    "requieren atención prioritaria."
+)
+
+# ── Radar grande full-width ────────────────────────────────────────────────────
+LEVEL_RINGS = [
+    (20, "Nivel 1", "#EF5350", "dot"),
+    (40, "Nivel 2", "#FF9800", "dot"),
+    (60, "Nivel 3", "#FDD835", "dashdot"),
+    (80, "Nivel 4", "#66BB6A", "dot"),
+    (100,"Nivel 5", "#1B5E20", "dash"),
+]
+DOMAIN_COLORS_RADAR = [
+    "#1565C0","#6A1B9A","#00695C","#E65100","#4527A0","#00838F"
+]
+
+fig_radar_big = go.Figure()
+
+# Anillos por nivel (del más exterior al interior para que no tapen el polígono)
+for ring_val, ring_name, ring_col, ring_dash in reversed(LEVEL_RINGS):
+    fig_radar_big.add_trace(go.Scatterpolar(
+        r=[ring_val]*len(labels_radar)+[ring_val],
+        theta=labels_radar+[labels_radar[0]],
+        mode="lines",
+        line=dict(color=ring_col, width=1.2, dash=ring_dash),
+        name=f"{ring_name} ({ring_val} pts)",
+        hovertemplate=f"<b>{ring_name}</b><br>Umbral: {ring_val} pts<extra></extra>",
+        opacity=0.7,
+    ))
+
+# Zona de nivel actual (relleno translúcido del color del nivel)
+fig_radar_big.add_trace(go.Scatterpolar(
+    r=scores_radar+[scores_radar[0]],
+    theta=labels_radar+[labels_radar[0]],
+    fill="toself",
+    fillcolor=hex_rgba(lc, 0.22),
+    line=dict(color=lc, width=3.5),
+    name=f"Perfil actual — Nivel {lvl} ({result.overall_score:.1f} pts)",
+    hovertemplate="<b>%{theta}</b><br>Score: %{r:.1f}/100<extra></extra>",
+))
+
+# Puntos con score anotado en cada vértice
+fig_radar_big.add_trace(go.Scatterpolar(
+    r=scores_radar,
+    theta=labels_radar,
+    mode="markers+text",
+    marker=dict(color=[DOMAIN_COLORS_RADAR[i] for i in range(len(scores_radar))],
+                size=12, symbol="circle",
+                line=dict(color="white", width=2)),
+    text=[f"<b>{s:.0f}</b>" for s in scores_radar],
+    textposition="top center",
+    textfont=dict(size=13, color="#1A1A2E"),
+    name="Score por dominio",
+    hovertemplate="<b>%{theta}</b><br>Score: %{r:.1f}/100<extra></extra>",
+    showlegend=False,
+))
+
+fig_radar_big.update_layout(
+    polar=dict(
+        radialaxis=dict(
+            visible=True, range=[0,105],
+            tickfont=dict(size=11, color="#333"),
+            gridcolor="#DEDEDE",
+            tickvals=[20,40,60,80,100],
+            ticktext=["20","40","60","80","100"],
+            linecolor="#BBBBBB",
+        ),
+        angularaxis=dict(
+            tickfont=dict(size=13, color="#1A1A2E"),
+            linecolor="#BBBBBB",
+            gridcolor="#EEEEEE",
+        ),
+        bgcolor="white",
+    ),
+    showlegend=True,
+    legend=dict(
+        orientation="h", yanchor="top", y=-0.08, x=0.5, xanchor="center",
+        font=dict(size=11), bgcolor="rgba(255,255,255,0.8)",
+        bordercolor="#DDDDDD", borderwidth=1,
+    ),
+    height=560,
+    margin=dict(l=80, r=80, t=60, b=130),
+    paper_bgcolor="white",
+    title=dict(
+        text=f"<b>Perfil de Madurez ISO 27001</b>  ·  "
+             f"<span style='color:{lc}'>Nivel {lvl} — {lvl_info['name']}</span>  ·  "
+             f"Score global: <b>{result.overall_score:.1f}/100</b>",
+        x=0.5, xanchor="center", font=dict(size=15, color="#1A237E"),
+    ),
+)
+apply_dark_font(fig_radar_big)
+st.plotly_chart(fig_radar_big, use_container_width=True)
+
+# ── Interpretación textual debajo del radar ────────────────────────────────────
+DOMAIN_WEIGHT = {k: ISO27001_DOMAINS[k].weight for k in ISO27001_DOMAINS}
+DOMAIN_CLAUSE = {k: ISO27001_DOMAINS[k].clause for k in ISO27001_DOMAINS}
+
+st.markdown("##### 📌 Interpretación del perfil de madurez por dominio")
+
+radar_cols = st.columns(3)
+for idx, (key, ds_score) in enumerate(result.domain_scores.items()):
+    ds = domain_stats[key]
+    col_idx = idx % 3
+    with radar_cols[col_idx]:
+        score    = ds_score.raw_score
+        sc_color = level_color(ds_score.level)
+        risk_pct = ds.risk_rate * 100
+        weight   = DOMAIN_WEIGHT[key]
+        clause   = DOMAIN_CLAUSE[key].split("–")[0].strip()
+
+        # Barra de progreso del dominio
+        bar_pct = int(score)
+        bar_filled = "█" * (bar_pct // 5)
+        bar_empty  = "░" * (20 - bar_pct // 5)
+
+        # Estado semáforo
+        if score >= 80:   estado, emoji = "Excelente",   "🟢"
+        elif score >= 60: estado, emoji = "Bueno",       "🟡"
+        elif score >= 40: estado, emoji = "Aceptable",   "🟠"
+        elif score >= 20: estado, emoji = "Deficiente",  "🔴"
+        else:             estado, emoji = "Crítico",     "🔴"
+
+        st.markdown(
+            f'<div style="background:white;border:1.5px solid {sc_color};border-left:5px solid {sc_color};'
+            f'border-radius:10px;padding:14px 16px;margin-bottom:12px;">'
+            f'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">'
+            f'  <span style="font-size:.95em;font-weight:700;color:{sc_color}">{clause}</span>'
+            f'  <span style="font-size:1.05em;font-weight:800;color:{sc_color}">{score:.1f}<small style="font-weight:400;color:#888">/100</small></span>'
+            f'</div>'
+            f'<div style="font-size:.82em;color:#555;margin-bottom:6px">{ds_score.domain_name} &nbsp;·&nbsp; peso {weight:.0%}</div>'
+            f'<div style="font-family:monospace;font-size:.78em;color:{sc_color};letter-spacing:1px;margin-bottom:6px">{bar_filled}<span style="color:#DDD">{bar_empty}</span></div>'
+            f'<div style="font-size:.82em;color:#333;">'
+            f'  {emoji} <b>{estado}</b> &nbsp;·&nbsp; Nivel {ds_score.level} — {ds_score.level_name}<br>'
+            f'  📋 Eventos totales: <b>{ds.total_events:,}</b> &nbsp;·&nbsp; '
+            f'  ⚠ Riesgo: <b style="color:{"#C62828" if risk_pct>20 else "#E65100" if risk_pct>10 else "#388E3C"}">{risk_pct:.1f}%</b><br>'
+            f'  🌐 IPs únicas: <b>{len(ds.unique_ips)}</b> &nbsp;·&nbsp; '
+            f'  👤 Usuarios: <b>{len(ds.unique_users)}</b>'
+            f'</div>'
+            + ("".join(f'<div style="margin-top:5px;font-size:.78em;color:#E65100">⚠ {n}</div>' for n in ds_score.notes) if ds_score.notes else '')
+            + f'</div>',
+            unsafe_allow_html=True,
+        )
+
+# ── Tabla comparativa niveles ──────────────────────────────────────────────────
+st.markdown("##### 📊 Posición en la escala COBIT — ¿Cuánto falta para el siguiente nivel?")
+level_compare_cols = st.columns(6)
+for i in range(6):
+    info = MATURITY_LEVELS[i]
+    lo, hi = info["range"]
+    is_current = (i == lvl)
+    bg = level_color(i)
+    with level_compare_cols[i]:
+        gap = max(0, lo - result.overall_score) if i > lvl else (
+              max(0, hi + 1 - result.overall_score) if i == lvl else 0)
+        label_extra = ""
+        if i == lvl:
+            label_extra = f"<br><small>Faltan {max(0,(hi+1-result.overall_score)):.0f} pts al Nv. {i+1}</small>" if i < 5 else "<br><small>✅ Nivel máximo</small>"
+        elif i < lvl:
+            label_extra = "<br><small>✅ Superado</small>"
+        else:
+            label_extra = f"<br><small>Faltan {lo - result.overall_score:.0f} pts</small>"
+        border = f"3px solid {bg}" if is_current else f"1px solid {bg}44"
+        shadow = f"box-shadow:0 0 12px {bg}66;" if is_current else ""
+        st.markdown(
+            f'<div style="background:{"" if not is_current else bg+"18"};border:{border};'
+            f'border-radius:10px;padding:10px 8px;text-align:center;{shadow}">'
+            f'<div style="font-size:1.5em;font-weight:800;color:{bg}">{"★" if is_current else str(i)}</div>'
+            f'<div style="font-size:.78em;font-weight:700;color:{bg}">{info["name"]}</div>'
+            f'<div style="font-size:.72em;color:#666">{lo}–{hi}%</div>'
+            f'<div style="font-size:.72em;color:{"#1565C0" if is_current else "#888"}">{label_extra}</div>'
+            f'</div>',
+            unsafe_allow_html=True,
+        )
+st.markdown("---")
+
 # ════════════════════════════════════════════════════════
 # FILA 2: Barras comparativas + Desglose componentes
 # ════════════════════════════════════════════════════════
 st.markdown('<div class="section-hdr">📋 Análisis por Dominio ISO 27001</div>', unsafe_allow_html=True)
 col_bar1, col_bar2 = st.columns(2)
- 
+
 # ── GRÁFICO 3: Barras riesgo vs seguro por dominio ────────────────────────────
 with col_bar1:
     st.markdown("#### ⚠ Eventos de Riesgo vs Seguros por Dominio")
@@ -338,7 +518,7 @@ with col_bar1:
     dom_names_short = [d.domain_name.replace("Seguridad en ","Seg. ").replace("Gestión de ","Gest. ")[:24] for d in domains]
     safe_counts = [domain_stats[k].indicator_events for k in dom_keys]
     risk_counts = [domain_stats[k].risk_events      for k in dom_keys]
- 
+
     fig_bar = go.Figure()
     fig_bar.add_trace(go.Bar(
         name="Eventos Seguros", x=dom_names_short, y=safe_counts,
@@ -361,14 +541,14 @@ with col_bar1:
     )
     apply_dark_font(fig_bar)
     st.plotly_chart(fig_bar, use_container_width=True)
- 
+
 # ── GRÁFICO 4: Desglose de componentes del score (stacked horizontal bar) ─────
 with col_bar2:
     st.markdown("#### 🔬 Desglose del Score por Componente")
     comps = ["Presencia de Logs","Efectividad de Controles","Ajuste Severidad","Cobertura"]
     comp_keys = ["logging_presence","control_effectiveness","severity_adjustment","coverage_bonus"]
     comp_colors = [C["primary"],"#00897B","#FB8C00","#8E24AA"]
- 
+
     fig_stack = go.Figure()
     for comp, key, color in zip(comps, comp_keys, comp_colors):
         vals = [max(0, d.breakdown.get(key, 0)) for d in domains]
@@ -386,12 +566,12 @@ with col_bar2:
     )
     apply_dark_font(fig_stack)
     st.plotly_chart(fig_stack, use_container_width=True)
- 
+
 # ════════════════════════════════════════════════════════
 # FILA 3: Score barras + Pie distribución
 # ════════════════════════════════════════════════════════
 col_scores, col_pie = st.columns([1.4, 1])
- 
+
 # ── GRÁFICO 5: Score por dominio (barras horizontales con colores de nivel) ───
 with col_scores:
     st.markdown("#### 📊 Score y Nivel por Dominio")
@@ -400,7 +580,7 @@ with col_scores:
     bar_names   = [f"{d.domain_name} ({d.clause.split('–')[0].strip()})" for d in sorted_domains]
     bar_scores  = [d.raw_score for d in sorted_domains]
     bar_levels  = [f"Nivel {d.level} — {d.level_name}" for d in sorted_domains]
- 
+
     fig_h = go.Figure()
     fig_h.add_trace(go.Bar(
         y=bar_names, x=bar_scores, orientation="h",
@@ -423,7 +603,7 @@ with col_scores:
     )
     apply_dark_font(fig_h)
     st.plotly_chart(fig_h, use_container_width=True)
- 
+
 # ── GRÁFICO 6: Pie distribución de eventos por dominio ────────────────────────
 with col_pie:
     st.markdown("#### 🥧 Distribución de Eventos por Dominio")
@@ -447,19 +627,19 @@ with col_pie:
     )
     apply_dark_font(fig_pie)
     st.plotly_chart(fig_pie, use_container_width=True)
- 
+
 # ════════════════════════════════════════════════════════
 # FILA 4: Heatmap de riesgo + Sunburst
 # ════════════════════════════════════════════════════════
 st.markdown('<div class="section-hdr">🔥 Mapa de Riesgo y Estructura de Eventos</div>', unsafe_allow_html=True)
 col_heat, col_sun = st.columns(2)
- 
+
 # ── GRÁFICO 7: Heatmap tasa de riesgo ────────────────────────────────────────
 with col_heat:
     st.markdown("#### 🌡 Mapa de Calor — Tasa de Riesgo por Dominio")
     categories = ["Tasa Riesgo %","Score (inv.)","Eventos Críticos","Cobertura IPs"]
     dom_short = [d.domain_name.replace("Seguridad en ","").replace("Gestión de ","")[:18] for d in domains]
- 
+
     heat_data = []
     for d in domains:
         ds = domain_stats[d.domain_key]
@@ -468,9 +648,9 @@ with col_heat:
         crit    = min(100, ds.critical_events * 10)
         cov_ips = min(100, len(ds.unique_ips) * 5)
         heat_data.append([rrate, inv_sc, crit, cov_ips])
- 
+
     df_heat = pd.DataFrame(heat_data, index=dom_short, columns=categories)
- 
+
     fig_heat = go.Figure(go.Heatmap(
         z=df_heat.values.tolist(),
         x=categories, y=dom_short,
@@ -494,29 +674,29 @@ with col_heat:
     apply_dark_font(fig_heat)
     st.plotly_chart(fig_heat, use_container_width=True)
     st.caption("🔴 Rojo = mayor riesgo/exposición · 🟢 Verde = menor riesgo · Valores en escala 0–100")
- 
+
 # ── GRÁFICO 8: Sunburst eventos ───────────────────────────────────────────────
 with col_sun:
     st.markdown("#### 🌞 Estructura Jerárquica de Eventos")
     sun_ids, sun_labels, sun_parents, sun_vals, sun_colors = [], [], [], [], []
- 
+
     sun_ids.append("root"); sun_labels.append("Total\nEventos"); sun_parents.append("")
     sun_vals.append(result.total_events); sun_colors.append(C["primary"])
- 
+
     for i, (key, d) in enumerate(zip(list(domain_stats.keys()), domains)):
         ds = domain_stats[key]
         if ds.total_events == 0: continue
         did = f"dom_{key}"
         sun_ids.append(did); sun_labels.append(d.domain_name.replace("Seguridad en ","Seg.\n").replace("Gestión de ","Gest.\n")[:20])
         sun_parents.append("root"); sun_vals.append(ds.total_events); sun_colors.append(C["domains"][i % len(C["domains"])])
- 
+
         if ds.indicator_events > 0:
             sun_ids.append(f"{did}_ok"); sun_labels.append("Seguros")
             sun_parents.append(did); sun_vals.append(ds.indicator_events); sun_colors.append("#66BB6A")
         if ds.risk_events > 0:
             sun_ids.append(f"{did}_risk"); sun_labels.append("Riesgo")
             sun_parents.append(did); sun_vals.append(ds.risk_events); sun_colors.append("#EF5350")
- 
+
     fig_sun = go.Figure(go.Sunburst(
         ids=sun_ids, labels=sun_labels, parents=sun_parents, values=sun_vals,
         marker=dict(colors=sun_colors, line=dict(width=1.5, color="white")),
@@ -532,13 +712,13 @@ with col_sun:
     apply_dark_font(fig_sun)
     st.plotly_chart(fig_sun, use_container_width=True)
     st.caption("🟢 Verde = eventos seguros · 🔴 Rojo = eventos de riesgo · Por dominio ISO 27001")
- 
+
 # ════════════════════════════════════════════════════════
 # FILA 5: Histograma de niveles + Progresión
 # ════════════════════════════════════════════════════════
 st.markdown('<div class="section-hdr">📈 Distribución de Niveles y Análisis de Brechas</div>', unsafe_allow_html=True)
 col_hist, col_prog = st.columns([1, 1.2])
- 
+
 # ── GRÁFICO 9: Histograma distribución de niveles por dominio ────────────────
 with col_hist:
     st.markdown("#### 📊 Distribución de Dominios por Nivel COBIT")
@@ -546,7 +726,7 @@ with col_hist:
     level_counts = [sum(1 for d in domains if d.level == i) for i in range(6)]
     level_pcts   = [c/len(domains)*100 for c in level_counts]
     bar_c        = [level_color(i) for i in range(6)]
- 
+
     fig_hist = go.Figure(go.Bar(
         x=level_names, y=level_counts,
         marker_color=bar_c,
@@ -563,7 +743,7 @@ with col_hist:
     )
     apply_dark_font(fig_hist)
     st.plotly_chart(fig_hist, use_container_width=True)
- 
+
 # ── GRÁFICO 10: Análisis de brecha — distancia a nivel 5 ─────────────────────
 with col_prog:
     st.markdown("#### 🚀 Análisis de Brecha — Distancia al Nivel 5 (100 pts)")
@@ -571,7 +751,7 @@ with col_prog:
     gap_names  = [d.domain_name.replace("Seguridad en ","Seg. ").replace("Gestión de ","Gest. ")[:26] for d in domains]
     gap_actual = [d.raw_score for d in domains]
     gap_needed = [max(0, target - d.raw_score) for d in domains]
- 
+
     fig_gap = go.Figure()
     fig_gap.add_trace(go.Bar(
         name="Score actual", y=gap_names, x=gap_actual, orientation="h",
@@ -594,13 +774,13 @@ with col_prog:
     apply_dark_font(fig_gap)
     st.plotly_chart(fig_gap, use_container_width=True)
     st.caption(f"Brecha global al Nivel 5: **{100-result.overall_score:.1f} pts** — Score actual: {result.overall_score:.1f}/100")
- 
+
 # ════════════════════════════════════════════════════════
 # Hallazgos y Recomendaciones
 # ════════════════════════════════════════════════════════
 st.markdown('<div class="section-hdr">🚨 Hallazgos Críticos y Recomendaciones</div>', unsafe_allow_html=True)
 col_find, col_rec = st.columns(2)
- 
+
 with col_find:
     st.markdown("#### ⚠ Hallazgos Críticos")
     if result.critical_findings:
@@ -608,12 +788,12 @@ with col_find:
             st.markdown(f'<div class="finding">⚠ {f}</div>', unsafe_allow_html=True)
     else:
         st.success("✅ Sin hallazgos críticos.")
- 
+
 with col_rec:
     st.markdown("#### 💡 Recomendaciones")
     for i, rec in enumerate(result.recommendations, 1):
         st.markdown(f'<div class="rec">{i}. {rec}</div>', unsafe_allow_html=True)
- 
+
 # ════════════════════════════════════════════════════════
 # Tabla de resumen detallado
 # ════════════════════════════════════════════════════════
@@ -635,38 +815,38 @@ for key, d in result.domain_scores.items():
     })
 df_table = pd.DataFrame(table_data).sort_values("Score", ascending=False)
 st.dataframe(df_table, use_container_width=True, hide_index=True)
- 
+
 # ════════════════════════════════════════════════════════
 # Descargas
 # ════════════════════════════════════════════════════════
 st.markdown('<div class="section-hdr">💾 Exportar Resultados</div>', unsafe_allow_html=True)
 dl1, dl2 = st.columns(2)
- 
+
 with dl1:
     with tempfile.NamedTemporaryFile(suffix=".html", delete=False) as tf:
         export_html(result, source_label, tf.name)
         html_bytes = Path(tf.name).read_bytes(); os.unlink(tf.name)
     st.download_button("⬇ Descargar Reporte HTML", data=html_bytes,
         file_name="reporte_madurez_iso27001.html", mime="text/html", use_container_width=True, type="primary")
- 
+
 with dl2:
     with tempfile.NamedTemporaryFile(suffix=".json", delete=False) as tf:
         export_json(result, tf.name)
         json_bytes = Path(tf.name).read_bytes(); os.unlink(tf.name)
     st.download_button("⬇ Descargar Datos JSON", data=json_bytes,
         file_name="resultado_madurez_iso27001.json", mime="application/json", use_container_width=True)
- 
+
 st.markdown(f"""
 <footer>
   🛡 Evaluador de Madurez en Seguridad de la Información · ISO/IEC 27001:2013 · COBIT 5 · NTP ISO/IEC 27001:2008<br>
   Fuente analizada: <b>{source_label}</b> · Eventos procesados: <b>{result.total_events:,}</b>
 </footer>
 """, unsafe_allow_html=True)
- 
+
 # ════════════════════════════════════════════════════════════════════════════
 # ███████  SECCIÓN DEEP LEARNING  ████████████████████████████████████████████
 # ════════════════════════════════════════════════════════════════════════════
- 
+
 st.divider()
 st.markdown(
     '<div class="section-hdr" style="font-size:1.4rem;color:#6A1B9A;">'
@@ -678,7 +858,7 @@ st.markdown(
     "logs analizados y enriquecen la evaluación de madurez con detección de "
     "anomalías, patrones temporales y clasificación neuronal."
 )
- 
+
 # ── Arquitectura visual ────────────────────────────────────────────────────────
 with st.expander("📐 Ver arquitectura de los modelos", expanded=False):
     arch_cols = st.columns(3)
@@ -714,7 +894,7 @@ with st.expander("📐 Ver arquitectura de los modelos", expanded=False):
                 if i < len(layers_list) - 1:
                     st.markdown(f'<div style="text-align:center;color:{color};margin:-2px 0">▼</div>',
                                 unsafe_allow_html=True)
- 
+
 # ── Entrenamiento ──────────────────────────────────────────────────────────────
 st.markdown("#### ⚙ Entrenamiento")
 dl_col1, dl_col2, dl_col3, dl_col4 = st.columns([1,1,1,1])
@@ -727,26 +907,26 @@ with dl_col3:
 with dl_col4:
     st.markdown("<br>", unsafe_allow_html=True)
     run_dl = st.button("🚀 Entrenar y Analizar con DL", type="primary", use_container_width=True)
- 
+
 if run_dl or "dl_result" in st.session_state:
     if run_dl:
         # Importar aquí para no ralentizar el arranque
         from ml.dl_pipeline import DLPipeline
         from rules.iso27001_controls import MATURITY_LEVELS as ML
- 
+
         prog_bar = st.progress(0, text="Inicializando modelos…")
- 
+
         @st.cache_resource(show_spinner=False)
         def get_pipeline():
             return DLPipeline()
- 
+
         pipeline = get_pipeline()
         pipeline._trained = False   # forzar reentrenamiento con nuevos hiperparámetros
- 
+
         prog_bar.progress(10, text="🔵 Entrenando Autoencoder…")
         pipeline.autoencoder = __import__('ml.autoencoder_model', fromlist=['LogAutoencoder']).LogAutoencoder()
         pipeline.autoencoder.fit(entries, epochs=ae_epochs, verbose=0)
- 
+
         prog_bar.progress(40, text="🟣 Entrenando LSTM Bidireccional…")
         from ml.lstm_model import LSTMThreatDetector
         from ml.dl_pipeline import _separate_normal_attack, _augment_attack_entries
@@ -757,13 +937,13 @@ if run_dl or "dl_result" in st.session_state:
         if len(attack_e) < 30:
             attack_e = _augment_attack_entries(attack_e, normal_e)
         pipeline.lstm.fit(normal_e, attack_e, epochs=lstm_epochs, verbose=0)
- 
+
         prog_bar.progress(70, text="🟠 Entrenando MLP Clasificador…")
         from ml.maturity_classifier import MaturityClassifier
         pipeline.classifier = MaturityClassifier()
         pipeline.classifier.fit(epochs=mlp_epochs, verbose=0)
         pipeline._trained = True
- 
+
         prog_bar.progress(90, text="📊 Calculando predicciones…")
         dl_res = pipeline.run(entries, domain_stats, result)
         st.session_state["dl_result"]  = dl_res
@@ -772,9 +952,9 @@ if run_dl or "dl_result" in st.session_state:
         prog_bar.empty()
     else:
         dl_res   = st.session_state["dl_result"]
- 
+
     from rules.iso27001_controls import MATURITY_LEVELS as ML
- 
+
     # ── KPIs Deep Learning ────────────────────────────────────────────────────
     st.markdown("---")
     k1,k2,k3,k4,k5 = st.columns(5)
@@ -792,13 +972,13 @@ if run_dl or "dl_result" in st.session_state:
                 f'<div class="kpi-lbl">{lbl}</div></div>',
                 unsafe_allow_html=True,
             )
- 
+
     # ════════════════════════════════════════════════════════
     # DL FILA 1: Curvas de entrenamiento
     # ════════════════════════════════════════════════════════
     st.markdown('<div class="section-hdr" style="color:#6A1B9A">📉 Curvas de Entrenamiento</div>', unsafe_allow_html=True)
     tc1, tc2, tc3 = st.columns(3)
- 
+
     def plot_loss_curve(train_loss, val_loss, train_acc, val_acc, title, color):
         epochs_ax = list(range(1, len(train_loss)+1))
         fig = go.Figure()
@@ -821,14 +1001,14 @@ if run_dl or "dl_result" in st.session_state:
             yaxis=dict(title="Pérdida", gridcolor="#F0F0F0"),
         )
         return fig
- 
+
     with tc1:
         st.markdown("**🔵 Autoencoder**")
         fig = plot_loss_curve(dl_res.ae_train_loss, dl_res.ae_val_loss, [], [], "Pérdida AE (MSE)", "#1565C0")
         st.plotly_chart(fig, use_container_width=True)
         sm = dl_res.ae_summary
         st.caption(f"Parámetros: {sm['parameters']:,} · Épocas: {sm['epochs_trained']} · Loss final: {sm['final_train_loss']}")
- 
+
     with tc2:
         st.markdown("**🟣 LSTM Bidireccional**")
         fig = plot_loss_curve(dl_res.lstm_train_loss, dl_res.lstm_val_loss,
@@ -838,7 +1018,7 @@ if run_dl or "dl_result" in st.session_state:
         sm = dl_res.lstm_summary
         acc = f"{sm['final_val_accuracy']:.1%}" if sm.get('final_val_accuracy') else "N/A"
         st.caption(f"Parámetros: {sm['parameters']:,} · Épocas: {sm['epochs_trained']} · Acc val: {acc}")
- 
+
     with tc3:
         st.markdown("**🟠 MLP Clasificador**")
         fig = plot_loss_curve(dl_res.mlp_train_loss, dl_res.mlp_val_loss,
@@ -848,19 +1028,19 @@ if run_dl or "dl_result" in st.session_state:
         sm = dl_res.mlp_summary
         acc = f"{sm['final_val_accuracy']:.1%}" if sm.get('final_val_accuracy') else "N/A"
         st.caption(f"Parámetros: {sm['parameters']:,} · Épocas: {sm['epochs_trained']} · Acc val: {acc}")
- 
+
     # ════════════════════════════════════════════════════════
     # DL FILA 2: Autoencoder — distribución de errores + anomalías
     # ════════════════════════════════════════════════════════
     st.markdown('<div class="section-hdr" style="color:#1565C0">🔵 Autoencoder — Detección de Anomalías</div>', unsafe_allow_html=True)
     ae1, ae2 = st.columns(2)
- 
+
     with ae1:
         st.markdown("#### Distribución del Error de Reconstrucción")
         scores_norm = dl_res.anomaly_scores
         normal_scores = scores_norm[~dl_res.is_anomaly]
         anom_scores   = scores_norm[dl_res.is_anomaly]
- 
+
         fig_hist_ae = go.Figure()
         if len(normal_scores):
             fig_hist_ae.add_trace(go.Histogram(
@@ -886,14 +1066,14 @@ if run_dl or "dl_result" in st.session_state:
         )
         apply_dark_font(fig_hist_ae)
         st.plotly_chart(fig_hist_ae, use_container_width=True)
- 
+
     with ae2:
         st.markdown("#### Timeline de Anomalías Detectadas")
         step = max(1, len(scores_norm) // 200)
         idx_plot = list(range(0, len(scores_norm), step))
         scores_plot = scores_norm[idx_plot]
         colors_plot = ["#C62828" if s >= 50 else "#2E7D32" for s in scores_plot]
- 
+
         fig_time = go.Figure()
         fig_time.add_trace(go.Scatter(
             x=idx_plot, y=scores_plot.tolist(),
@@ -911,26 +1091,26 @@ if run_dl or "dl_result" in st.session_state:
         )
         apply_dark_font(fig_time)
         st.plotly_chart(fig_time, use_container_width=True)
- 
+
     st.info(
         f"🔵 **Autoencoder:** {dl_res.anomaly_rate:.1f}% de eventos clasificados como "
         f"anomalías ({int(dl_res.is_anomaly.sum()):,} de {len(dl_res.is_anomaly):,}). "
         f"Umbral automático (P95): {dl_res.autoencoder_threshold:.6f}"
     )
- 
+
     # ════════════════════════════════════════════════════════
     # DL FILA 3: LSTM — probabilidades de amenaza
     # ════════════════════════════════════════════════════════
     st.markdown('<div class="section-hdr" style="color:#6A1B9A">🟣 LSTM — Detección Temporal de Amenazas</div>', unsafe_allow_html=True)
     ls1, ls2 = st.columns(2)
- 
+
     with ls1:
         st.markdown("#### Probabilidad de Amenaza por Ventana de 20 Eventos")
         tp = dl_res.threat_probs
         step2 = max(1, len(tp)//150)
         tp_plot = tp[::step2]
         col_tp = ["#C62828" if p>=0.75 else "#F57F17" if p>=0.5 else "#2E7D32" for p in tp_plot]
- 
+
         fig_lstm = go.Figure()
         fig_lstm.add_trace(go.Bar(
             x=list(range(len(tp_plot))), y=tp_plot.tolist(),
@@ -949,7 +1129,7 @@ if run_dl or "dl_result" in st.session_state:
         )
         apply_dark_font(fig_lstm)
         st.plotly_chart(fig_lstm, use_container_width=True)
- 
+
     with ls2:
         st.markdown("#### Distribución de Niveles de Amenaza")
         tl = dl_res.threat_level
@@ -971,26 +1151,26 @@ if run_dl or "dl_result" in st.session_state:
         )
         apply_dark_font(fig_donut)
         st.plotly_chart(fig_donut, use_container_width=True)
- 
+
     st.info(
         f"🟣 **LSTM:** Prob. amenaza máxima detectada: **{tl['max_threat_prob']:.1%}** · "
         f"Ventanas de alto riesgo: **{tl['pct_high_threat']:.1f}%** · "
         f"Secuencias analizadas: **{tl['total_sequences']:,}**"
     )
- 
+
     # ════════════════════════════════════════════════════════
     # DL FILA 4: MLP — predicción de madurez + comparativa
     # ════════════════════════════════════════════════════════
     st.markdown('<div class="section-hdr" style="color:#E65100">🟠 MLP — Clasificación de Nivel de Madurez</div>', unsafe_allow_html=True)
     ml1, ml2 = st.columns(2)
- 
+
     with ml1:
         st.markdown("#### Probabilidades por Nivel de Madurez (MLP)")
         probs_dict = dl_res.dl_probabilities
         niveles_lbl = [f"Nivel {i}\n{ML[i]['name'][:10]}" for i in range(6)]
         probs_vals  = [probs_dict.get(i, 0) for i in range(6)]
         bar_col_mlp = [level_color(i) for i in range(6)]
- 
+
         fig_mlp = go.Figure(go.Bar(
             x=niveles_lbl, y=probs_vals,
             marker_color=bar_col_mlp,
@@ -1012,13 +1192,13 @@ if run_dl or "dl_result" in st.session_state:
         )
         apply_dark_font(fig_mlp)
         st.plotly_chart(fig_mlp, use_container_width=True)
- 
+
     with ml2:
         st.markdown("#### 🆚 Comparativa: Sistema de Reglas vs Deep Learning")
         rule_lvl  = dl_res.rule_based_level
         dl_lvl    = dl_res.dl_predicted_level
         adj_score = dl_res.dl_adjusted_score
- 
+
         compare_data = {
             "Método": ["Sistema de Reglas\n(ISO 27001)", "MLP — Deep Learning\n(Clasificador neuronal)", "Score Ajustado DL\n(con penalización AE)"],
             "Nivel":  [rule_lvl, dl_lvl, int(adj_score / 20)],
@@ -1047,7 +1227,7 @@ if run_dl or "dl_result" in st.session_state:
         )
         apply_dark_font(fig_comp)
         st.plotly_chart(fig_comp, use_container_width=True)
- 
+
     # ── Tabla resumen modelos DL ───────────────────────────────────────────────
     st.markdown("#### 📋 Resumen de los Modelos Entrenados")
     sm_ae   = dl_res.ae_summary
@@ -1077,7 +1257,7 @@ if run_dl or "dl_result" in st.session_state:
          "Métrica clave": f"Nivel predicho: {dl_res.dl_predicted_level} ({dl_res.dl_confidence:.1f}% confianza)"},
     ])
     st.dataframe(df_models, use_container_width=True, hide_index=True)
- 
+
     st.success(
         f"🧠 **Análisis Deep Learning completado** · "
         f"Total parámetros entrenados: "
@@ -1086,4 +1266,3 @@ if run_dl or "dl_result" in st.session_state:
     )
 else:
     st.info("👆 Configura las épocas y presiona **'Entrenar y Analizar con DL'** para activar el análisis neuronal.")
- 
