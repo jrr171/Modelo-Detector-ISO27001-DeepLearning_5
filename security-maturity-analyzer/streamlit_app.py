@@ -152,7 +152,7 @@ st.markdown('<div class="subtitle">Detección de Incumplimiento de Requisitos IS
 # ────────────────────────────────────────────────────────────────────────────
 # Input tabs
 # ────────────────────────────────────────────────────────────────────────────
-tab_up, tab_demo, tab_paste = st.tabs(["📁 Subir archivos", "🧪 Demo Comercio Exterior", "📋 Pegar texto"])
+tab_up, tab_demo, tab_paste, tab_compare = st.tabs(["📁 Subir archivos", "🧪 Demo Comercio Exterior", "📋 Pegar texto", "📊 Comparar logs"])
 
 entries, source_label = [], ""
 
@@ -193,6 +193,81 @@ with tab_paste:
         os.unlink(tf_path)
         source_label = "Texto pegado"
         st.success(f"✅ {len(entries):,} eventos leídos")
+
+
+with tab_compare:
+    st.markdown("**Compara hasta 5 archivos de log** y visualiza sus perfiles de madurez superpuestos en un radar.")
+    compare_files = st.file_uploader(
+        "Sube los archivos a comparar", type=["log","txt","csv","json","gz"],
+        accept_multiple_files=True, key="compare_uploader"
+    )
+    if compare_files and len(compare_files) >= 2:
+        import tempfile, os as _os
+        compare_results = []
+        for cf in compare_files[:5]:
+            with tempfile.NamedTemporaryFile(suffix=_os.path.splitext(cf.name)[1] or ".log", delete=False) as tf:
+                tf.write(cf.read()); tf_path = tf.name
+            _p = LogParser(); _e = _p.parse_path(tf_path); _os.unlink(tf_path)
+            _s = EventClassifier().classify(_e); _r = MaturityScorer().score(_s)
+            compare_results.append({"name": cf.name[:30], "result": _r, "entries": len(_e)})
+
+        if compare_results:
+            st.success(f"✅ {len(compare_results)} archivos analizados")
+            COMPARE_COLORS = ["#1565C0","#C62828","#2E7D32","#6A1B9A","#E65100"]
+            DOMAIN_KEYS_C  = list(ISO27001_DOMAINS.keys())
+            labels_c = [f"{ISO27001_DOMAINS[k].id}<br>{r['domain_scores'][k].domain_name[:12]}"
+                        for k, r in [(k, compare_results[0]["result"].domain_scores) for k in DOMAIN_KEYS_C]]
+
+            fig_compare = go.Figure()
+            for i, cr in enumerate(compare_results):
+                scores_c = [cr["result"].domain_scores[k].raw_score for k in DOMAIN_KEYS_C]
+                col_c = COMPARE_COLORS[i % len(COMPARE_COLORS)]
+                fig_compare.add_trace(go.Scatterpolar(
+                    r=scores_c+[scores_c[0]], theta=labels_c+[labels_c[0]],
+                    fill="toself", fillcolor=hex_rgba(col_c, 0.10),
+                    line=dict(color=col_c, width=2.5),
+                    name=f"{cr['name']}  (Nv.{cr['result'].overall_level} · {cr['result'].overall_score:.1f} pts)",
+                    hovertemplate="<b>%{theta}</b><br>Score: %{r:.1f}<extra>" + cr['name'] + "</extra>",
+                ))
+            # Level reference ring
+            fig_compare.add_trace(go.Scatterpolar(
+                r=[60]*6+[60], theta=labels_c+[labels_c[0]], mode="lines",
+                line=dict(color="#FBC02D", width=1.2, dash="dot"),
+                name="Referencia Nivel 3 (60 pts)", hoverinfo="skip",
+            ))
+            fig_compare.update_layout(
+                polar=dict(
+                    radialaxis=dict(visible=True, range=[0,100], tickfont=dict(size=10),
+                                    gridcolor="#E8EAF6", tickvals=[20,40,60,80,100]),
+                    angularaxis=dict(tickfont=dict(size=11)), bgcolor="white",
+                ),
+                showlegend=True,
+                legend=dict(orientation="h", y=-0.12, x=0.5, xanchor="center", font=dict(size=10)),
+                height=520, margin=dict(l=80,r=80,t=60,b=120), paper_bgcolor="white",
+                title=dict(text="<b>Comparativa de Perfiles de Madurez ISO 27001</b>",
+                           x=0.5, font=dict(size=14, color="#0D47A1")),
+            )
+            apply_dark_font(fig_compare)
+            st.plotly_chart(fig_compare, use_container_width=True)
+
+            # Score comparison table
+            st.markdown("#### Tabla comparativa")
+            comp_cols = st.columns(len(compare_results))
+            for i, (cr, col) in enumerate(zip(compare_results, comp_cols)):
+                r = cr["result"]; lc2 = level_color(r.overall_level)
+                with col:
+                    st.markdown(
+                        f'<div style="border:2px solid {lc2};border-radius:10px;padding:12px;text-align:center">'
+                        f'<div style="font-size:.85em;color:#555;margin-bottom:4px">{cr["name"]}</div>'
+                        f'<div style="font-size:2em;font-weight:800;color:{lc2}">{r.overall_score:.1f}</div>'
+                        f'<div style="font-size:.8em;color:{lc2};font-weight:700">Nivel {r.overall_level} — {r.overall_level_name}</div>'
+                        f'<div style="font-size:.75em;color:#888;margin-top:4px">{cr["entries"]:,} eventos</div>'
+                        f'</div>', unsafe_allow_html=True)
+    elif compare_files and len(compare_files) < 2:
+        st.info("Sube al menos 2 archivos para comparar.")
+    else:
+        st.info("Aquí puedes subir múltiples logs de diferentes servidores y ver sus perfiles de madurez superpuestos en un solo radar.")
+
 
 if not entries and "entries" in st.session_state:
     entries = st.session_state["entries"]
@@ -778,6 +853,131 @@ with col_prog:
 # ════════════════════════════════════════════════════════
 # Hallazgos y Recomendaciones
 # ════════════════════════════════════════════════════════
+
+# ════════════════════════════════════════════════════════
+# LÍNEA DE TIEMPO DE EVENTOS
+# ════════════════════════════════════════════════════════
+st.markdown('<div class="section-hdr">⏱ Línea de Tiempo de Eventos</div>', unsafe_allow_html=True)
+st.markdown("Distribución temporal de los eventos registrados en el log. Los colores indican la severidad de cada evento.")
+
+events_with_ts = [e for e in entries if e.timestamp is not None]
+if events_with_ts:
+    import pandas as pd_tl
+    lvl_colors_tl = {"DEBUG":"#90A4AE","INFO":"#42A5F5","WARNING":"#FFA726","ERROR":"#EF5350","CRITICAL":"#B71C1C"}
+    lvl_size_tl   = {"DEBUG":5,"INFO":5,"WARNING":7,"ERROR":9,"CRITICAL":12}
+
+    df_tl = pd_tl.DataFrame([{
+        "ts":    e.timestamp,
+        "nivel": e.level,
+        "msg":   (e.message or "")[:80],
+        "ip":    e.source_ip or "-",
+        "color": lvl_colors_tl.get(e.level,"#90A4AE"),
+        "size":  lvl_size_tl.get(e.level,5),
+        "y":     {"DEBUG":0,"INFO":1,"WARNING":2,"ERROR":3,"CRITICAL":4}.get(e.level,1),
+    } for e in events_with_ts])
+    df_tl = df_tl.sort_values("ts")
+
+    fig_tl = go.Figure()
+    for nivel, grp in df_tl.groupby("nivel"):
+        col_tl = lvl_colors_tl.get(nivel,"#90A4AE")
+        fig_tl.add_trace(go.Scatter(
+            x=grp["ts"], y=grp["y"],
+            mode="markers",
+            name=nivel,
+            marker=dict(color=col_tl, size=grp["size"].tolist(), opacity=0.8,
+                        line=dict(color="white", width=0.5)),
+            hovertemplate="<b>%{x|%d/%m %H:%M}</b><br>" + nivel + "<br>%{customdata}<extra></extra>",
+            customdata=grp["msg"].tolist(),
+        ))
+    fig_tl.update_layout(
+        height=280, paper_bgcolor="white", plot_bgcolor="white",
+        yaxis=dict(tickvals=[0,1,2,3,4],
+                   ticktext=["DEBUG","INFO","WARNING","ERROR","CRITICAL"],
+                   gridcolor="#F0F0F0", title="Severidad", tickfont=dict(size=10)),
+        xaxis=dict(title="Fecha / Hora", gridcolor="#F0F0F0"),
+        legend=dict(orientation="h", y=-0.3, x=0.5, xanchor="center"),
+        margin=dict(l=10,r=10,t=20,b=60),
+        showlegend=True,
+    )
+    apply_dark_font(fig_tl)
+    st.plotly_chart(fig_tl, use_container_width=True)
+
+    # Stats
+    tl_c1, tl_c2, tl_c3, tl_c4 = st.columns(4)
+    with tl_c1:
+        st.metric("Eventos con timestamp", f"{len(events_with_ts):,}")
+    with tl_c2:
+        crit_n = sum(1 for e in events_with_ts if e.level == "CRITICAL")
+        st.metric("Eventos CRITICAL", crit_n, delta=None)
+    with tl_c3:
+        err_n = sum(1 for e in events_with_ts if e.level == "ERROR")
+        st.metric("Eventos ERROR", err_n)
+    with tl_c4:
+        if len(events_with_ts) > 1:
+            span = events_with_ts[-1].timestamp - events_with_ts[0].timestamp if hasattr(events_with_ts[-1].timestamp, '__sub__') else None
+            st.metric("Período analizado", f"{span.days} días" if span else "—")
+        else:
+            st.metric("Período analizado", "—")
+else:
+    st.info("Los archivos cargados no contienen timestamps parseables. El timeline requiere logs con fecha/hora.")
+
+
+
+# ════════════════════════════════════════════════════════
+# PLAN DE ACCIÓN AUTOMÁTICO
+# ════════════════════════════════════════════════════════
+st.markdown('<div class="section-hdr">🎯 Plan de Acción Prioritizado</div>', unsafe_allow_html=True)
+st.markdown(
+    "Acciones concretas ordenadas por **urgencia** (peor dominio primero), con nivel de esfuerzo "
+    "estimado y tiempo de implementación."
+)
+
+from analyzer.action_plan import generate_action_plan
+action_plan = generate_action_plan(result)
+
+if not action_plan:
+    st.success("🎉 Todos los dominios están en niveles de madurez óptimos. Mantén el programa de mejora continua.")
+else:
+    for item in action_plan:
+        effort_color = {"Bajo":"#2E7D32","Medio":"#E65100","Alto":"#C62828"}.get(item["effort"],"#555")
+        lvl_c = level_color(item["level"])
+        with st.expander(
+            f"{'🔴' if item['effort']=='Alto' else '🟡' if item['effort']=='Medio' else '🟢'} "
+            f"#{item['priority']} — {item['domain']}  |  Score: {item['score']:.1f}/100  |  "
+            f"Nv. {item['level']} — {item['level_name']}  |  "
+            f"Faltan {item['gap_to_next']:.0f} pts al Nv. {item['level']+1 if item['level']<5 else 5}",
+            expanded=item["priority"] <= 2,
+        ):
+            a1, a2, a3 = st.columns(3)
+            with a1:
+                st.markdown(f'<div class="kpi-card"><div class="kpi-val" style="color:{lvl_c}">{item["score"]:.1f}</div><div class="kpi-lbl">SCORE ACTUAL</div></div>', unsafe_allow_html=True)
+            with a2:
+                st.markdown(f'<div class="kpi-card"><div class="kpi-val" style="color:{effort_color}">{item["effort"]}</div><div class="kpi-lbl">ESFUERZO</div></div>', unsafe_allow_html=True)
+            with a3:
+                st.markdown(f'<div class="kpi-card"><div class="kpi-val" style="font-size:1.1em;color:#555">{item["tiempo"]}</div><div class="kpi-lbl">TIEMPO EST.</div></div>', unsafe_allow_html=True)
+
+            st.markdown("**Acciones recomendadas:**")
+            for action in item["actions"]:
+                st.markdown(f'<div style="background:#F8FAFF;border-left:3px solid {lvl_c};padding:7px 12px;margin-bottom:5px;border-radius:4px;font-size:.9em">{action}</div>', unsafe_allow_html=True)
+
+    # Summary progress bar
+    st.markdown("#### Resumen de brechas por dominio")
+    for item in action_plan:
+        lc3 = level_color(item["level"])
+        pct = int(item["score"])
+        gap = item["gap_to_next"]
+        st.markdown(
+            f'<div style="display:flex;align-items:center;gap:12px;margin-bottom:6px">'
+            f'<span style="min-width:200px;font-size:.85em;color:#333">{item["domain"][:35]}</span>'
+            f'<div style="flex:1;background:#EEE;border-radius:4px;height:14px;overflow:hidden">'
+            f'  <div style="width:{pct}%;background:{lc3};height:14px;border-radius:4px"></div></div>'
+            f'<span style="min-width:80px;font-size:.82em;color:{lc3};font-weight:700">{item["score"]:.1f}/100</span>'
+            f'<span style="min-width:100px;font-size:.78em;color:#888">▲ {gap:.0f} pts al sig. nv.</span>'
+            f'</div>',
+            unsafe_allow_html=True,
+        )
+
+
 st.markdown('<div class="section-hdr">🚨 Hallazgos Críticos y Recomendaciones</div>', unsafe_allow_html=True)
 col_find, col_rec = st.columns(2)
 
@@ -820,21 +1020,43 @@ st.dataframe(df_table, use_container_width=True, hide_index=True)
 # Descargas
 # ════════════════════════════════════════════════════════
 st.markdown('<div class="section-hdr">💾 Exportar Resultados</div>', unsafe_allow_html=True)
-dl1, dl2 = st.columns(2)
+dl1, dl2, dl3 = st.columns(3)
 
 with dl1:
     with tempfile.NamedTemporaryFile(suffix=".html", delete=False) as tf:
         export_html(result, source_label, tf.name)
         html_bytes = Path(tf.name).read_bytes(); os.unlink(tf.name)
-    st.download_button("⬇ Descargar Reporte HTML", data=html_bytes,
+    st.download_button("⬇ Reporte HTML completo", data=html_bytes,
         file_name="reporte_madurez_iso27001.html", mime="text/html", use_container_width=True, type="primary")
+    st.caption("Incluye gráficos, hallazgos y recomendaciones")
 
 with dl2:
     with tempfile.NamedTemporaryFile(suffix=".json", delete=False) as tf:
         export_json(result, tf.name)
         json_bytes = Path(tf.name).read_bytes(); os.unlink(tf.name)
-    st.download_button("⬇ Descargar Datos JSON", data=json_bytes,
+    st.download_button("⬇ Datos JSON estructurado", data=json_bytes,
         file_name="resultado_madurez_iso27001.json", mime="application/json", use_container_width=True)
+    st.caption("Para integración con otras herramientas")
+
+with dl3:
+    if st.button("⬇ Generar Reporte PDF", use_container_width=True, key="pdf_btn"):
+        with st.spinner("Generando PDF con gráficos..."):
+            try:
+                from analyzer.pdf_report  import generate_pdf
+                from analyzer.action_plan import generate_action_plan as _gap
+                _ap = _gap(result)
+                pdf_bytes = generate_pdf(result, domain_stats, source_label, _ap)
+                st.download_button(
+                    "📄 Descargar PDF ahora",
+                    data=pdf_bytes,
+                    file_name="reporte_madurez_iso27001.pdf",
+                    mime="application/pdf",
+                    use_container_width=True,
+                    key="pdf_dl",
+                )
+            except Exception as _e:
+                st.error(f"Error generando PDF: {_e}")
+    st.caption("PDF con portada, gráficos y plan de acción")
 
 st.markdown(f"""
 <footer>
